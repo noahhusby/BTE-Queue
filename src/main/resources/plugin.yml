@@ -1,0 +1,6 @@
+name: BTE-Queue
+version: ${project.version}
+main: com.noahhusby.btequeue.BTEQueue
+authors: [noahhusby]
+description: A queue server manager for the official Build the Earth servers
+website: https://noahhusby.com
