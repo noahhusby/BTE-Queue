@@ -1,16 +1,19 @@
+/**
+ * BTEQueue.java
+ * Author: Noah Husby
+ * Date: 9/1/2020
+ */
 package com.noahhusby.btequeue;
 
 import com.github.steveice10.mc.auth.data.GameProfile;
-import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.protocol.MinecraftConstants;
 import com.github.steveice10.mc.protocol.MinecraftProtocol;
 import com.github.steveice10.mc.protocol.ServerLoginHandler;
-import com.github.steveice10.mc.protocol.data.SubProtocol;
 import com.github.steveice10.mc.protocol.data.game.chunk.BlockStorage;
 import com.github.steveice10.mc.protocol.data.game.chunk.Chunk;
 import com.github.steveice10.mc.protocol.data.game.chunk.Column;
 import com.github.steveice10.mc.protocol.data.game.chunk.NibbleArray3d;
-import com.github.steveice10.mc.protocol.data.game.entity.player.GameMode;
+import com.github.steveice10.mc.protocol.data.game.entity.player.PlayerAction;
 import com.github.steveice10.mc.protocol.data.game.setting.Difficulty;
 import com.github.steveice10.mc.protocol.data.game.world.WorldType;
 import com.github.steveice10.mc.protocol.data.game.world.block.BlockState;
@@ -19,193 +22,226 @@ import com.github.steveice10.mc.protocol.data.status.PlayerInfo;
 import com.github.steveice10.mc.protocol.data.status.ServerStatusInfo;
 import com.github.steveice10.mc.protocol.data.status.VersionInfo;
 import com.github.steveice10.mc.protocol.data.status.handler.ServerInfoBuilder;
-import com.github.steveice10.mc.protocol.data.status.handler.ServerInfoHandler;
-import com.github.steveice10.mc.protocol.data.status.handler.ServerPingTimeHandler;
-import com.github.steveice10.mc.protocol.packet.ingame.client.ClientChatPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.ClientKeepAlivePacket;
-import com.github.steveice10.mc.protocol.packet.ingame.server.ServerChatPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerActionPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionRotationPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.ServerJoinGamePacket;
+import com.github.steveice10.mc.protocol.packet.ingame.server.ServerKeepAlivePacket;
+import com.github.steveice10.mc.protocol.packet.ingame.server.entity.player.ServerPlayerPositionRotationPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerChunkDataPacket;
-import com.github.steveice10.mc.protocol.packet.login.client.LoginStartPacket;
-import com.github.steveice10.packetlib.Client;
+import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerUpdateTimePacket;
+import com.github.steveice10.opennbt.stream.NBTInputStream;
+import com.github.steveice10.opennbt.tag.ByteArrayTag;
+import com.github.steveice10.opennbt.tag.CompoundTag;
+import com.github.steveice10.opennbt.tag.ShortTag;
+import com.github.steveice10.opennbt.tag.Tag;
 import com.github.steveice10.packetlib.Server;
-import com.github.steveice10.packetlib.Session;
 import com.github.steveice10.packetlib.event.server.ServerAdapter;
 import com.github.steveice10.packetlib.event.server.SessionAddedEvent;
-import com.github.steveice10.packetlib.event.server.SessionRemovedEvent;
-import com.github.steveice10.packetlib.event.session.DisconnectedEvent;
 import com.github.steveice10.packetlib.event.session.PacketReceivedEvent;
 import com.github.steveice10.packetlib.event.session.SessionAdapter;
 import com.github.steveice10.packetlib.tcp.TcpSessionFactory;
+import com.noahhusby.btequeue.config.ConfigHandler;
+import com.noahhusby.btequeue.data.chunks.BlockChunk;
 
-import javax.swing.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.Proxy;
-import java.util.Arrays;
+import java.util.*;
+
+import static com.github.steveice10.opennbt.NBTUtils.getChildTag;
 
 public class BTEQueue {
-    private static final boolean SPAWN_SERVER = true;
-    private static final boolean VERIFY_USERS = false;
-    private static final String HOST = "127.0.0.1";
-    private static final int PORT = 25565;
-    private static final Proxy PROXY = Proxy.NO_PROXY;
-    private static final Proxy AUTH_PROXY = Proxy.NO_PROXY;
-    private static final String USERNAME = "Username";
-    private static final String PASSWORD = "Password";
+    private static final ConfigHandler config = ConfigHandler.getInstance();
 
     public static void main(String[] args) {
-        if(SPAWN_SERVER) {
-            Server server = new Server(HOST, PORT, MinecraftProtocol.class, new TcpSessionFactory(PROXY));
-            server.setGlobalFlag(MinecraftConstants.AUTH_PROXY_KEY, AUTH_PROXY);
-            server.setGlobalFlag(MinecraftConstants.VERIFY_USERS_KEY, VERIFY_USERS);
-            server.setGlobalFlag(MinecraftConstants.SERVER_INFO_BUILDER_KEY, new ServerInfoBuilder() {
-                @Override
-                public ServerStatusInfo buildInfo(Session session) {
-                    return new ServerStatusInfo(new VersionInfo(MinecraftConstants.GAME_VERSION, MinecraftConstants.PROTOCOL_VERSION), new PlayerInfo(100, 0, new GameProfile[0]), new TextMessage("Hello world!"), null);
-                }
-            });
+        splash();
+        List<Column> chunkPayload = generateChunkPayload();
 
-            server.setGlobalFlag(MinecraftConstants.SERVER_LOGIN_HANDLER_KEY, new ServerLoginHandler() {
-                @Override
-                public void loggedIn(Session session) {
-                    session.send(new ServerJoinGamePacket(0, false, GameMode.CREATIVE, 0, Difficulty.PEACEFUL, 10, WorldType.DEFAULT, false));
-                        BlockStorage b = new BlockStorage();
-                        System.out.println("1!");
-                        for(int x = 0; x < 16; x++) {
-                            for(int y = 0; y < 16; y++) {
-                                for(int z = 0; z < 16; z++) {
-                                    b.set(x, y, z, new BlockState(98, 0));
+        System.out.println("Ready for players!");
+        Server server = createServer();
+
+        server.setGlobalFlag(MinecraftConstants.SERVER_LOGIN_HANDLER_KEY, (ServerLoginHandler) session -> {
+            session.send(new ServerJoinGamePacket(0, false, config.gameMode, 0, Difficulty.PEACEFUL, 1000, WorldType.DEFAULT, false));
+            session.send(new ServerUpdateTimePacket(0, 18000));
+            session.send(new ServerPlayerPositionRotationPacket(config.x,config.y,config.z,0,0,0));
+            // Send initial payload
+            for(Column c : chunkPayload) {
+                ServerChunkDataPacket pkX = new ServerChunkDataPacket(c);
+                session.send(pkX);
+            }
+        });
+
+        server.setGlobalFlag(MinecraftConstants.SERVER_COMPRESSION_THRESHOLD, config.server_compression_threshold);
+        server.addListener(new ServerAdapter() {
+            @Override
+            public void sessionAdded(SessionAddedEvent event) {
+                event.getSession().addListener(new SessionAdapter() {
+                    @Override
+                    public void packetReceived(PacketReceivedEvent event) {
+                        if(event.getPacket() instanceof ClientPlayerPositionRotationPacket) {
+                            // Periodically checks player location, and returns them to the structure if they fall in the void.
+                            // Since the server isn't actively asking for the location, the client sends it much more infrequently
+                            ClientPlayerPositionRotationPacket p = event.getPacket();
+                            if(p.getY() < 0) {
+                                event.getSession().send(new ServerPlayerPositionRotationPacket(config.x,config.y,config.z,0,0,0));
+                                for(Column c : chunkPayload) {
+                                    ServerChunkDataPacket pkX = new ServerChunkDataPacket(c);
+                                    event.getSession().send(pkX);
+                                }
+                            }
+                        } else if(event.getPacket() instanceof ClientPlayerPositionPacket) {
+                            // Periodically checks player location, and returns them to the structure if they fall in the void.
+                            // Since the server isn't actively asking for the location, the client sends it much more infrequently
+                            ClientPlayerPositionPacket p = event.getPacket();
+                            if(p.getY() < 0) {
+                                event.getSession().send(new ServerPlayerPositionRotationPacket(config.x,config.y,config.z,0,0,0));
+                                for(Column c : chunkPayload) {
+                                    ServerChunkDataPacket pkX = new ServerChunkDataPacket(c);
+                                    event.getSession().send(pkX);
+                                }
+                            }
+                        } else if(event.getPacket() instanceof ClientKeepAlivePacket) {
+                            // Keeps the client alive, and updates the time
+                            event.getSession().send(new ServerKeepAlivePacket(0));
+                        } else if (event.getPacket() instanceof ClientPlayerActionPacket) {
+                            // Transfers the chunk payload upon breaking blocks, thus preventing it
+                            // This has no known impact on performance
+                            ClientPlayerActionPacket p = event.getPacket();
+                            if(p.getAction() == PlayerAction.FINISH_DIGGING) {
+                                for(Column c : chunkPayload) {
+                                    ServerChunkDataPacket pkX = new ServerChunkDataPacket(c);
+                                    event.getSession().send(pkX);
                                 }
                             }
                         }
-                        System.out.println("2!");
-                        Chunk chk = new Chunk(b,  new NibbleArray3d(4096), new NibbleArray3d(4096));
-                        System.out.println("3!");
-                        for(int x = 0; x < 4; x++) {
-                            for(int z = 0; z < 4; z++) {
-                                Column col = new Column(x, z, new Chunk[] { chk , chk , chk, chk, chk, chk, chk, chk, chk , chk , chk, chk, chk, chk, chk, chk }, new byte[256], null);
-                                ServerChunkDataPacket pkX = new ServerChunkDataPacket(col);
-                                session.send(pkX);
+                    }
+                });
+            }
 
-                                col = new Column(-x, z, new Chunk[] { chk , chk , chk, chk, chk, chk, chk, chk, chk , chk , chk, chk, chk, chk, chk, chk }, new byte[256], null);
-                                pkX = new ServerChunkDataPacket(col);
-                                //session.send(pkX);
+        });
+        server.bind();
 
-                                col = new Column(-x, -z, new Chunk[] { chk , chk , chk, chk, chk, chk, chk, chk, chk , chk , chk, chk, chk, chk, chk, chk }, new byte[256], null);
-                                pkX = new ServerChunkDataPacket(col);
-                                //session.send(pkX);
+    }
 
-                                col = new Column(x, -z, new Chunk[] { chk , chk , chk, chk, chk, chk, chk, chk, chk , chk , chk, chk, chk, chk, chk, chk }, new byte[256], null);
-                                pkX = new ServerChunkDataPacket(col);
-                                //session.send(pkX);
-                            }
-                        }
+    private static void splash() {
+        System.out.println("--------------------------------------------------------");
+        System.out.println("BTE Queue v"+ Constants.VERSION);
+        System.out.println("Developed by: Noah Husby\n");
 
-                }
-            });
+        System.out.println("Host: "+ config.host);
+        System.out.println("Port: "+ config.port);
+        System.out.println("--------------------------------------------------------");
 
-            server.setGlobalFlag(MinecraftConstants.SERVER_COMPRESSION_THRESHOLD, 100);
-            server.addListener(new ServerAdapter() {
-                @Override
-                public void sessionAdded(SessionAddedEvent event) {
-                    event.getSession().addListener(new SessionAdapter() {
-                        @Override
-                        public void packetReceived(PacketReceivedEvent event) {
-                            if(event.getPacket() instanceof ClientKeepAlivePacket) {
-                                ClientKeepAlivePacket clientKeepAlivePacket = event.getPacket();
-                            }
-                        }
-                    });
-                }
+    }
 
-                @Override
-                public void sessionRemoved(SessionRemovedEvent event) {
-                    MinecraftProtocol protocol = (MinecraftProtocol) event.getSession().getPacketProtocol();
-                    if(protocol.getSubProtocol() == SubProtocol.GAME) {
+    private static Server createServer() {
+        Server server = new Server(config.host, Integer.parseInt(config.port), MinecraftProtocol.class, new TcpSessionFactory(Proxy.NO_PROXY));
+        server.setGlobalFlag(MinecraftConstants.AUTH_PROXY_KEY, Proxy.NO_PROXY);
+        server.setGlobalFlag(MinecraftConstants.VERIFY_USERS_KEY, false);
+        server.setGlobalFlag(MinecraftConstants.SERVER_INFO_BUILDER_KEY, (ServerInfoBuilder) session -> new ServerStatusInfo(new VersionInfo(MinecraftConstants.GAME_VERSION, MinecraftConstants.PROTOCOL_VERSION), new PlayerInfo(1000, 0, new GameProfile[0]), new TextMessage("BTE Queue"), null));
+        return server;
+    }
+
+    private static List<Column> generateChunkPayload() {
+        System.out.println("\nGenerating chunk payload from schematic...");
+        // Load Schematic
+        File f = new File(System.getProperty("user.dir"), "queue.schematic");
+        if(!f.exists()) {
+            System.out.println("Error: queue.schematic couldn't be found in: "+System.getProperty("user.dir"));
+            System.out.println("Please confirm that the file exists, and try again!");
+            System.exit(0);
+        }
+        try {
+            FileInputStream fis = new FileInputStream(f);
+            NBTInputStream nbt = new NBTInputStream(fis);
+            CompoundTag backupTag = (CompoundTag) nbt.readTag();
+            Map<String, Tag> tagCollection = backupTag.getValue();
+
+            short width = getChildTag(tagCollection, "Width", ShortTag.class).getValue();
+            short height = getChildTag(tagCollection, "Height", ShortTag.class).getValue();
+            short length = getChildTag(tagCollection, "Length", ShortTag.class).getValue();
+
+            byte[] localBlocks = getChildTag(tagCollection, "Blocks", ByteArrayTag.class).getValue();
+            byte[] localMetadata = getChildTag(tagCollection, "Data", ByteArrayTag.class).getValue();
+
+            short[][][] blocks = new short[width][height][length];
+            byte[][][] metadata = new byte[width][height][length];
+
+            for(int x = 0; x < width; x++)
+            {
+                for(int y = 0; y < height; y++)
+                {
+                    for(int z = 0; z < length; z++)
+                    {
+                        int index = x + (y * length + z) * width;
+                        blocks[x][y][z] = (short) ((localBlocks[index] & 0xFF));
+                        metadata[x][y][z] = (byte) (localMetadata[index] & 0xFF);
                     }
                 }
-            });
-
-            server.bind();
-        }
-
-        status();
-        //login();
-    }
-
-    private static void status() {
-        MinecraftProtocol protocol = new MinecraftProtocol(SubProtocol.STATUS);
-        Client client = new Client(HOST, PORT, protocol, new TcpSessionFactory(PROXY));
-        client.getSession().setFlag(MinecraftConstants.AUTH_PROXY_KEY, AUTH_PROXY);
-        client.getSession().setFlag(MinecraftConstants.SERVER_INFO_HANDLER_KEY, new ServerInfoHandler() {
-            @Override
-            public void handle(Session session, ServerStatusInfo info) {
-                System.out.println("Version: " + info.getVersionInfo().getVersionName() + ", " + info.getVersionInfo().getProtocolVersion());
-                System.out.println("Player Count: " + info.getPlayerInfo().getOnlinePlayers() + " / " + info.getPlayerInfo().getMaxPlayers());
-                System.out.println("Players: " + Arrays.toString(info.getPlayerInfo().getPlayers()));
-                System.out.println("Description: " + info.getDescription().getFullText());
-                System.out.println("Icon: " + info.getIcon());
             }
-        });
 
-        client.getSession().setFlag(MinecraftConstants.SERVER_PING_TIME_HANDLER_KEY, new ServerPingTimeHandler() {
-            @Override
-            public void handle(Session session, long pingTime) {
-                System.out.println("Server ping took " + pingTime + "ms");
+            nbt.close();
+            fis.close();
+
+            double xChunk = 14;
+            double yChunk = Math.ceil(height/16.0);
+            double zChunk = 14;
+
+            // Increase the default chunk payload if schematic is larger
+            if(Math.ceil(width/16.0) > 7) {
+                xChunk = Math.ceil(width/16.0);
             }
-        });
 
-        client.getSession().connect();
-        while(client.getSession().isConnected()) {
-            try {
-                Thread.sleep(5);
-            } catch(InterruptedException e) {
-                e.printStackTrace();
+            if(Math.ceil(length/16.0) > 7) {
+                zChunk = Math.ceil(length/16.0);
             }
-        }
-    }
 
-    private static void login() {
-        MinecraftProtocol protocol = null;
-        if(VERIFY_USERS) {
-            try {
-                protocol = new MinecraftProtocol(USERNAME, PASSWORD, false);
-                System.out.println("Successfully authenticated user.");
-            } catch(RequestException e) {
-                e.printStackTrace();
-                return;
-            }
-        } else {
-            protocol = new MinecraftProtocol(USERNAME);
-        }
+            List<Column> l = new ArrayList<>();
 
-        Client client = new Client(HOST, PORT, protocol, new TcpSessionFactory(PROXY));
-        client.getSession().setFlag(MinecraftConstants.AUTH_PROXY_KEY, AUTH_PROXY);
-        client.getSession().addListener(new SessionAdapter() {
-            @Override
-            public void packetReceived(PacketReceivedEvent event) {
-                if(event.getPacket() instanceof ServerJoinGamePacket) {
-                    event.getSession().send(new ClientChatPacket("Hello, this is a test of MCProtocolLib."));
-                } else if(event.getPacket() instanceof ServerChatPacket) {
-                    Message message = event.<ServerChatPacket>getPacket().getMessage();
-                    System.out.println("Received Message: " + message.getFullText());
-                    if(message instanceof TranslationMessage) {
-                        System.out.println("Received Translation Components: " + Arrays.toString(((TranslationMessage) message).getTranslationParams()));
+            for(int x = -14; x < xChunk; x++) {
+                for(int z = -14; z < zChunk; z++) {
+                    Map<Integer, BlockChunk> verticalChunks = new HashMap<>();
+                    for(int y = 0; y < yChunk; y++) {
+                        NibbleArray3d blockLighting = new NibbleArray3d(4096);
+
+                        BlockStorage b = new BlockStorage();
+                        for(int xBlock = 0; xBlock < 16; xBlock++) {
+                            for(int zBlock = 0; zBlock < 16; zBlock++) {
+                                for(int yBlock = 0; yBlock < 16; yBlock++) {
+                                    try {
+                                        b.set(xBlock, yBlock, zBlock, new BlockState(blocks[xBlock+(x*16)][yBlock+(y*16)][zBlock+(z*16)], metadata[xBlock+(x*16)][yBlock+(y*16)][zBlock+(z*16)]));
+                                        blockLighting.set(xBlock, yBlock, zBlock, 15);
+                                    } catch (ArrayIndexOutOfBoundsException e) {
+                                        b.set(xBlock, yBlock, zBlock, new BlockState(0, 0));
+                                    }
+                                }
+                            }
+                        }
+                        verticalChunks.put(y, new BlockChunk(b, blockLighting));
                     }
-
-                    event.getSession().disconnect("Finished");
+                    List<Chunk> chunks = new ArrayList<>();
+                    for(int val = 0; val < verticalChunks.size(); val++) {
+                        chunks.add(new Chunk(verticalChunks.get(val).blockStorage, verticalChunks.get(val).blockLighting, new NibbleArray3d(4096)));
+                    }
+                    for(int val = 0; val < 16-chunks.size(); val++) {
+                          chunks.add(new Chunk(new BlockStorage(),  new NibbleArray3d(4096), new NibbleArray3d(4096)));
+                    }
+                    Chunk[] chunkArray = chunks.toArray(new Chunk[16]);
+                    Column col = new Column(x, z, chunkArray, new byte[256], null);
+                    l.add(col);
                 }
             }
+            System.out.println("Succsessfully generated chunk payload!\n");
+            return l;
 
-            @Override
-            public void disconnected(DisconnectedEvent event) {
-                System.out.println("Disconnected: " + Message.fromString(event.getReason()).getFullText());
-                if(event.getCause() != null) {
-                    event.getCause().printStackTrace();
-                }
-            }
-        });
+            } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-        client.getSession().connect();
+        System.out.println("There was an error loading the chunk payload, major issues may occur!\n");
+        return null;
     }
-
 }
