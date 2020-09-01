@@ -65,7 +65,7 @@ public class BTEQueue {
 
         server.setGlobalFlag(MinecraftConstants.SERVER_LOGIN_HANDLER_KEY, (ServerLoginHandler) session -> {
             session.send(new ServerJoinGamePacket(0, false, config.gameMode, 0, Difficulty.PEACEFUL, 1000, WorldType.DEFAULT, false));
-            session.send(new ServerUpdateTimePacket(0, 18000));
+            session.send(new ServerUpdateTimePacket(0, 16000));
             session.send(new ServerPlayerPositionRotationPacket(config.x,config.y,config.z,0,0,0));
             // Send initial payload
             for(Column c : chunkPayload) {
@@ -86,6 +86,7 @@ public class BTEQueue {
                             // Since the server isn't actively asking for the location, the client sends it much more infrequently
                             ClientPlayerPositionRotationPacket p = event.getPacket();
                             if(p.getY() < 0) {
+                                event.getSession().send(new ServerUpdateTimePacket(0, 18000));
                                 event.getSession().send(new ServerPlayerPositionRotationPacket(config.x,config.y,config.z,0,0,0));
                                 for(Column c : chunkPayload) {
                                     ServerChunkDataPacket pkX = new ServerChunkDataPacket(c);
@@ -97,20 +98,19 @@ public class BTEQueue {
                             // Since the server isn't actively asking for the location, the client sends it much more infrequently
                             ClientPlayerPositionPacket p = event.getPacket();
                             if(p.getY() < 0) {
+                                event.getSession().send(new ServerUpdateTimePacket(0, 18000));
                                 event.getSession().send(new ServerPlayerPositionRotationPacket(config.x,config.y,config.z,0,0,0));
                                 for(Column c : chunkPayload) {
                                     ServerChunkDataPacket pkX = new ServerChunkDataPacket(c);
                                     event.getSession().send(pkX);
                                 }
                             }
-                        } else if(event.getPacket() instanceof ClientKeepAlivePacket) {
-                            // Keeps the client alive, and updates the time
-                            event.getSession().send(new ServerKeepAlivePacket(0));
                         } else if (event.getPacket() instanceof ClientPlayerActionPacket) {
                             // Transfers the chunk payload upon breaking blocks, thus preventing it
                             // This has no known impact on performance
                             ClientPlayerActionPacket p = event.getPacket();
                             if(p.getAction() == PlayerAction.FINISH_DIGGING) {
+                                event.getSession().send(new ServerUpdateTimePacket(0, 18000));
                                 for(Column c : chunkPayload) {
                                     ServerChunkDataPacket pkX = new ServerChunkDataPacket(c);
                                     event.getSession().send(pkX);
