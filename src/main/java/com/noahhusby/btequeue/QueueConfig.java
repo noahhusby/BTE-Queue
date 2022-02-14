@@ -18,17 +18,28 @@
  *
  */
 
-package com.noahhusby.btequeue.data.chunks;
+package com.noahhusby.btequeue;
 
-import com.github.steveice10.mc.protocol.data.game.chunk.BlockStorage;
-import com.github.steveice10.mc.protocol.data.game.chunk.NibbleArray3d;
+import com.github.steveice10.mc.protocol.data.game.entity.player.GameMode;
+import com.noahhusby.lib.application.config.Config;
 
-public class BlockChunk {
-    public final BlockStorage blockStorage;
-    public final NibbleArray3d blockLighting;
 
-    public BlockChunk(BlockStorage blockStorage, NibbleArray3d blockLighting) {
-        this.blockStorage = blockStorage;
-        this.blockLighting = blockLighting;
+/**
+ * @author Noah Husby
+ */
+@Config(type = Config.Type.JSON)
+public class QueueConfig {
+    public static String host = "127.0.0.1";
+    public static String port = "25565";
+    public static int server_compression_threshold = 100;
+    public static GameMode gameMode = GameMode.SURVIVAL;
+
+    public static Position position = new Position();
+
+    public static class Position {
+        public int x = 8;
+        public int y = 1;
+        public int z = 9;
     }
+
 }
