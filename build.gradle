@@ -9,7 +9,7 @@ ext {
 
     husbyVersion = "0.1.114"
     protocolLibVersion = "1.12.2-2"
-    openNbtVersion = "1.3"
+    openNbtVersion = "1.4"
 }
 
 repositories {
