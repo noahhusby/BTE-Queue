@@ -242,7 +242,7 @@ public class BTEQueue {
                     l.add(col);
                 }
             }
-            System.out.println("Succsessfully generated chunk payload!\n");
+            System.out.println("Successfully generated chunk payload!\n");
             return l;
 
         } catch (IOException e) {
