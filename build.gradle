@@ -7,7 +7,7 @@ ext {
     versionMajor = "1.0"
     version = "$versionMajor." + ('git rev-list --count HEAD'.execute().text.trim())
 
-    husbyVersion = "0.1.115"
+    husbyVersion = "0.1.121"
     protocolLibVersion = "1.12.2-2"
     openNbtVersion = "1.4"
 }
